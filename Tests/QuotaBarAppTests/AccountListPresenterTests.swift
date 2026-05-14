@@ -177,6 +177,57 @@ struct AccountListPresenterTests {
         #expect(result.map(\.id) == [highWeekly.id, lowWeekly.id])
     }
 
+    @Test("available accounts prioritize sooner expiry to maximize utilization")
+    func availableAccountsPrioritizeSoonerExpiry() {
+        let highButFar = Account(id: UUID(), tool: .codex, name: "high-far", createdAt: Date(timeIntervalSince1970: 1))
+        let lowerButSoon = Account(id: UUID(), tool: .codex, name: "low-soon", createdAt: Date(timeIntervalSince1970: 2))
+        let quotaByAccount = [
+            highButFar.id: snapshot(remaining: 90, accountValidUntil: Date(timeIntervalSince1970: 1_800_000)),
+            lowerButSoon.id: snapshot(remaining: 40, accountValidUntil: Date(timeIntervalSince1970: 36_000))
+        ]
+
+        let result = AccountListPresenter.visibleAccounts(
+            accounts: [highButFar, lowerButSoon],
+            filter: .all,
+            activeID: nil,
+            quotaByAccount: quotaByAccount,
+            loadStateByAccount: [:],
+            frozenOrder: nil
+        )
+
+        #expect(result.map(\.id) == [lowerButSoon.id, highButFar.id])
+    }
+
+    @Test("available accounts with equal utilization fall back to freshest snapshot")
+    func availableAccountsPreferFresherSnapshotsAsTieBreaker() {
+        let stale = Account(id: UUID(), tool: .codex, name: "stale", createdAt: Date(timeIntervalSince1970: 1))
+        let fresh = Account(id: UUID(), tool: .codex, name: "fresh", createdAt: Date(timeIntervalSince1970: 2))
+        let commonExpiry = Date(timeIntervalSince1970: 86_400)
+        let quotaByAccount = [
+            stale.id: snapshot(
+                remaining: 50,
+                accountValidUntil: commonExpiry,
+                updatedAt: Date(timeIntervalSince1970: 0)
+            ),
+            fresh.id: snapshot(
+                remaining: 50,
+                accountValidUntil: commonExpiry,
+                updatedAt: Date(timeIntervalSince1970: 600)
+            )
+        ]
+
+        let result = AccountListPresenter.visibleAccounts(
+            accounts: [stale, fresh],
+            filter: .all,
+            activeID: nil,
+            quotaByAccount: quotaByAccount,
+            loadStateByAccount: [:],
+            frozenOrder: nil
+        )
+
+        #expect(result.map(\.id) == [fresh.id, stale.id])
+    }
+
     @Test("claude code unavailable accounts prioritize recoverable accounts")
     func claudeCodeUnavailableAccountsPrioritizeRecoverableAccounts() {
         let recoverable = Account(id: UUID(), tool: .claudeCode, name: "recoverable", createdAt: Date(timeIntervalSince1970: 1))
@@ -245,14 +296,20 @@ struct AccountListPresenterTests {
         #expect(result.map(\.id) == [lowQuota.id, highQuota.id])
     }
 
-    private func snapshot(remaining: Double, resetAt: Date? = nil) -> QuotaSnapshot {
+    private func snapshot(
+        remaining: Double,
+        resetAt: Date? = nil,
+        accountValidUntil: Date? = nil,
+        updatedAt: Date = Date(timeIntervalSince1970: 0)
+    ) -> QuotaSnapshot {
         QuotaSnapshot(
             source: "test",
             primary: QuotaWindow(label: "5h", used: 100 - remaining, limit: 100, resetAt: resetAt),
             secondary: nil,
             creditsRemaining: nil,
             creditsTotal: nil,
-            updatedAt: Date(timeIntervalSince1970: 0),
+            updatedAt: updatedAt,
+            accountValidUntil: accountValidUntil,
             note: nil
         )
     }

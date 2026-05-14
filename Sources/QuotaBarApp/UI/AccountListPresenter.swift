@@ -89,8 +89,11 @@ struct AccountListPresenter {
                     quotaByAccount: quotaByAccount,
                     loadStateByAccount: loadStateByAccount
                 ),
+                utilizationScore: utilizationScore(account, quotaByAccount: quotaByAccount),
                 bottleneckRatio: bottleneckRemainingRatio(account, quotaByAccount: quotaByAccount),
-                earliestReset: earliestResetDate(account, quotaByAccount: quotaByAccount)
+                earliestReset: earliestResetDate(account, quotaByAccount: quotaByAccount),
+                accountValidUntil: accountValidUntilDate(account, quotaByAccount: quotaByAccount),
+                snapshotUpdatedAt: snapshotUpdatedAtDate(account, quotaByAccount: quotaByAccount)
             )
         }
 
@@ -123,13 +126,25 @@ struct AccountListPresenter {
             }
 
             if lhs.isAvailable {
+                if lhs.utilizationScore != rhs.utilizationScore {
+                    return lhs.utilizationScore > rhs.utilizationScore
+                }
+
                 if lhs.bottleneckRatio != rhs.bottleneckRatio {
                     return lhs.bottleneckRatio > rhs.bottleneckRatio
+                }
+
+                if lhs.accountValidUntil != rhs.accountValidUntil {
+                    return lhs.accountValidUntil < rhs.accountValidUntil
                 }
             } else {
                 if lhs.earliestReset != rhs.earliestReset {
                     return lhs.earliestReset < rhs.earliestReset
                 }
+            }
+
+            if lhs.snapshotUpdatedAt != rhs.snapshotUpdatedAt {
+                return lhs.snapshotUpdatedAt > rhs.snapshotUpdatedAt
             }
 
             return lhs.account.createdAt < rhs.account.createdAt
@@ -177,6 +192,30 @@ struct AccountListPresenter {
         return ratios.min() ?? -1
     }
 
+    private static func utilizationScore(
+        _ account: Account,
+        quotaByAccount: [UUID: QuotaSnapshot]
+    ) -> Double {
+        guard let quota = quotaByAccount[account.id],
+              isAccountAvailable(account, quotaByAccount: quotaByAccount) else {
+            return -1
+        }
+        let bottleneck = bottleneckRemainingRatio(account, quotaByAccount: quotaByAccount)
+        guard bottleneck >= 0 else { return -1 }
+
+        let reference = quota.updatedAt
+        let resetUrgency = urgencyWeight(deadline: earliestResetDate(account, quotaByAccount: quotaByAccount), reference: reference)
+        let expiryUrgency = urgencyWeight(deadline: accountValidUntilDate(account, quotaByAccount: quotaByAccount), reference: reference)
+        return bottleneck * ((resetUrgency * 0.65) + (expiryUrgency * 0.35))
+    }
+
+    private static func urgencyWeight(deadline: Date, reference: Date) -> Double {
+        guard deadline != .distantFuture else { return 0 }
+        let secondsUntilDeadline = deadline.timeIntervalSince(reference)
+        let clampedSeconds = max(secondsUntilDeadline, 3600)
+        return 1 / clampedSeconds
+    }
+
     private static func earliestResetDate(
         _ account: Account,
         quotaByAccount: [UUID: QuotaSnapshot]
@@ -185,14 +224,31 @@ struct AccountListPresenter {
         return quota.orderedMetrics.compactMap(\.resetAt).min() ?? .distantFuture
     }
 
+    private static func accountValidUntilDate(
+        _ account: Account,
+        quotaByAccount: [UUID: QuotaSnapshot]
+    ) -> Date {
+        quotaByAccount[account.id]?.accountValidUntil ?? .distantFuture
+    }
+
+    private static func snapshotUpdatedAtDate(
+        _ account: Account,
+        quotaByAccount: [UUID: QuotaSnapshot]
+    ) -> Date {
+        quotaByAccount[account.id]?.updatedAt ?? .distantPast
+    }
+
     private struct SortEntry {
         let account: Account
         let isActive: Bool
         let frozenRank: Int?
         let isAvailable: Bool
         let availabilityRank: AvailabilityRank
+        let utilizationScore: Double
         let bottleneckRatio: Double
         let earliestReset: Date
+        let accountValidUntil: Date
+        let snapshotUpdatedAt: Date
     }
 
     private enum AvailabilityRank: Int, Comparable {
