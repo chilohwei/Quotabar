@@ -4,7 +4,7 @@ cask "quotabar" do
 
   url "https://github.com/chilohwei/QuotaBar/releases/download/v#{version}/QuotaBar-#{version}-universal.dmg"
   name "QuotaBar"
-  desc "Menu bar tool for viewing Codex quota and switching local accounts"
+  desc "Menu bar tool for viewing AI tool quotas and switching local accounts"
   homepage "https://github.com/chilohwei/QuotaBar"
 
   livecheck do
