@@ -36,6 +36,7 @@ final class StatusBarController: NSObject {
             }
         )
 
+        applyDebugUpdateBannerStateIfNeeded()
         configureStatusItem()
         configurePopover()
     }
@@ -219,6 +220,36 @@ final class StatusBarController: NSObject {
         }
         appState.setLanguage(language)
         updateStatusTitle()
+    }
+
+    private func applyDebugUpdateBannerStateIfNeeded() {
+        let environment = ProcessInfo.processInfo.environment
+        guard let rawState = environment["QUOTABAR_DEBUG_UPDATE_STATE"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+            !rawState.isEmpty else {
+            return
+        }
+
+        let version = environment["QUOTABAR_DEBUG_UPDATE_VERSION"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedVersion = version?.isEmpty == false ? version! : "1.0.2"
+
+        switch rawState {
+        case "available":
+            appState.updateBannerState = .available(version: resolvedVersion)
+        case "checking":
+            appState.updateBannerState = .checking
+        case "downloading":
+            let rawProgress = environment["QUOTABAR_DEBUG_UPDATE_PROGRESS"]?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let progress = rawProgress.flatMap(Double.init).map { min(max($0, 0), 1) }
+            appState.updateBannerState = .downloading(progress: progress)
+        case "installing":
+            appState.updateBannerState = .installing
+        default:
+            break
+        }
     }
 
     private func showUpdateResult(_ result: UpdateCheckResult) {

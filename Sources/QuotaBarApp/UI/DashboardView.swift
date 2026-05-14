@@ -61,6 +61,10 @@ struct DashboardView: View {
     var body: some View {
         VStack(spacing: 10) {
             header
+            if shouldShowUpdateNotice {
+                updateNoticeBar
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             accountList
                 .frame(maxHeight: .infinity)
             footerBar
@@ -482,13 +486,6 @@ struct DashboardView: View {
 
             Spacer(minLength: 6)
 
-            if shouldShowUpdateChip {
-                updateChip
-                    .fixedSize()
-            }
-
-            Spacer(minLength: 6)
-
             Button(text.string(.quit)) {
                 NSApp.terminate(nil)
             }
@@ -503,46 +500,69 @@ struct DashboardView: View {
         .frame(height: 28)
     }
 
-    private var shouldShowUpdateChip: Bool {
+    private var shouldShowUpdateNotice: Bool {
         if case .idle = appState.updateBannerState {
             return false
         }
         return true
     }
 
-    private var updateChip: some View {
+    private var updateNoticeBar: some View {
         Button {
             appState.installAvailableUpdateFromDashboard()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: updateChipIconName)
-                    .font(.system(size: 10.5, weight: .semibold))
-                Text(updateChipLabel)
-                    .font(.system(size: 11.5, weight: .medium))
+            HStack(spacing: 10) {
+                Image(systemName: updateNoticeIconName)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .frame(width: 16)
+
+                Text(updateNoticeTitle)
+                    .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
                     .monospacedDigit()
+
+                Spacer(minLength: 8)
+
+                if let action = updateNoticeActionLabel {
+                    Text(action)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .frame(height: 23)
+                        .foregroundStyle(Branding.primaryActionText)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Branding.accentBlue)
+                        )
+                }
             }
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .foregroundStyle(updateChipTint)
+            .padding(.leading, 12)
+            .padding(.trailing, updateNoticeActionLabel == nil ? 12 : 6)
+            .frame(height: 36)
+            .frame(maxWidth: .infinity)
+            .foregroundStyle(updateNoticeTint)
             .background(
-                Capsule(style: .continuous)
-                    .fill(updateChipBackground)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(updateNoticeBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(updateNoticeTint.opacity(0.14), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
-        .disabled(!isUpdateChipEnabled)
-        .opacity(isUpdateChipEnabled ? 1 : 0.92)
+        .disabled(!isUpdateNoticeEnabled)
+        .opacity(isUpdateNoticeEnabled ? 1 : 0.94)
     }
 
-    private var isUpdateChipEnabled: Bool {
+    private var isUpdateNoticeEnabled: Bool {
         if case .available = appState.updateBannerState {
             return true
         }
         return false
     }
 
-    private var updateChipIconName: String {
+    private var updateNoticeIconName: String {
         switch appState.updateBannerState {
         case .available:
             return "arrow.down.circle.fill"
@@ -557,16 +577,16 @@ struct DashboardView: View {
         }
     }
 
-    private var updateChipLabel: String {
+    private var updateNoticeTitle: String {
         switch appState.updateBannerState {
         case .available(let version):
             switch appState.language {
             case .english:
-                return "Update \(version)"
+                return "New version \(version) available"
             case .simplifiedChinese:
-                return "更新 \(version)"
+                return "新版本 \(version) 可用"
             case .traditionalChinese:
-                return "更新 \(version)"
+                return "新版本 \(version) 可用"
             }
         case .checking:
             switch appState.language {
@@ -611,7 +631,19 @@ struct DashboardView: View {
         }
     }
 
-    private var updateChipTint: Color {
+    private var updateNoticeActionLabel: String? {
+        guard case .available = appState.updateBannerState else { return nil }
+        switch appState.language {
+        case .english:
+            return "Update"
+        case .simplifiedChinese:
+            return "更新"
+        case .traditionalChinese:
+            return "更新"
+        }
+    }
+
+    private var updateNoticeTint: Color {
         switch appState.updateBannerState {
         case .available:
             return Branding.accentBlueDark
@@ -624,7 +656,7 @@ struct DashboardView: View {
         }
     }
 
-    private var updateChipBackground: Color {
+    private var updateNoticeBackground: Color {
         switch appState.updateBannerState {
         case .available:
             return Branding.accentBlueSoft

@@ -126,16 +126,16 @@ struct AccountListPresenter {
             }
 
             if lhs.isAvailable {
+                if lhs.accountValidUntil != rhs.accountValidUntil {
+                    return lhs.accountValidUntil < rhs.accountValidUntil
+                }
+
                 if lhs.utilizationScore != rhs.utilizationScore {
                     return lhs.utilizationScore > rhs.utilizationScore
                 }
 
                 if lhs.bottleneckRatio != rhs.bottleneckRatio {
                     return lhs.bottleneckRatio > rhs.bottleneckRatio
-                }
-
-                if lhs.accountValidUntil != rhs.accountValidUntil {
-                    return lhs.accountValidUntil < rhs.accountValidUntil
                 }
             } else {
                 if lhs.earliestReset != rhs.earliestReset {

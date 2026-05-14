@@ -370,17 +370,6 @@ struct CodexProvider: Provider {
     func recoverSecret(for account: Account) async throws -> String? {
         var hasScopedArtifact = false
 
-        if let managed = account.settings.codexHomePath, !managed.isEmpty {
-            hasScopedArtifact = true
-            let managedAuthPath = "\(managed)/auth.json"
-            if fileService.fileExists(at: managedAuthPath) {
-                let managedSecret = try fileService.readText(at: managedAuthPath)
-                if recoveredSecretMatches(managedSecret, account: account, source: .managed) {
-                    return managedSecret
-                }
-            }
-        }
-
         if let registryKey = account.settings.codexRegistryKey, !registryKey.isEmpty {
             hasScopedArtifact = true
             let registryAuthPath = registryAuthSnapshotPath(accountKey: registryKey)
@@ -388,6 +377,17 @@ struct CodexProvider: Provider {
                 let registrySecret = try fileService.readText(at: registryAuthPath)
                 if recoveredSecretMatches(registrySecret, account: account, source: .registrySnapshot) {
                     return registrySecret
+                }
+            }
+        }
+
+        if let managed = account.settings.codexHomePath, !managed.isEmpty {
+            hasScopedArtifact = true
+            let managedAuthPath = "\(managed)/auth.json"
+            if fileService.fileExists(at: managedAuthPath) {
+                let managedSecret = try fileService.readText(at: managedAuthPath)
+                if recoveredSecretMatches(managedSecret, account: account, source: .managed) {
+                    return managedSecret
                 }
             }
         }
@@ -594,7 +594,7 @@ struct CodexProvider: Provider {
                     accessToken: accessToken,
                     accountID: resolvedAccountID,
                     accountKey: resolvedAccountKey,
-                    codexHomePath: account.settings.codexHomePath,
+                    codexHomePath: nil,
                     fallbackAccountIdentifier: resolvedFallbackIdentifier,
                     fallbackPlanName: fallbackPlanName,
                     fallbackAccountValidUntil: identity.accountValidUntil ?? subscriptionMeta?.accountValidUntil,
