@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Distribution
+build/
+dist/
+*.dmg
+*.zip
+*.app
+*.xcarchive
+
+# Local config and logs
+.env
+.env.*
+*.log
+*.swp
+
+# Local git metadata backups
+.git.backup-*/
+
+# Local assistant/plugin runtime artifacts
+.claude-plugin/
+.vscode/
+config.json
+events.jsonl
+views.json
+labels/
+sessions/
+statuses/

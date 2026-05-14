@@ -1,0 +1,234 @@
+import Foundation
+
+struct QuotaWindow: Codable, Equatable, Sendable {
+    let label: String
+    let used: Double
+    let limit: Double
+    let resetAt: Date?
+
+    var remaining: Double {
+        max(limit - used, 0)
+    }
+
+    var usagePercent: Double {
+        guard limit > 0 else { return 0 }
+        return min(max(used / limit, 0), 1)
+    }
+
+    var remainingPercent: Double {
+        max(0, 1 - usagePercent) * 100
+    }
+}
+
+enum QuotaDisplayMetric: Equatable, Sendable {
+    case window(QuotaWindow)
+    case credits(remaining: Double, total: Double, periodEnd: Date?)
+
+    var title: String {
+        switch self {
+        case .window(let window):
+            return window.label
+        case .credits:
+            return "Credits"
+        }
+    }
+
+    var ratio: Double? {
+        switch self {
+        case .window(let window):
+            guard window.limit > 0 else { return nil }
+            return min(max(window.remaining / window.limit, 0), 1)
+        case .credits(let remaining, let total, _):
+            guard total > 0 else { return nil }
+            return min(max(remaining / total, 0), 1)
+        }
+    }
+
+    var resetAt: Date? {
+        switch self {
+        case .window(let window):
+            return window.resetAt
+        case .credits(_, _, let periodEnd):
+            return periodEnd
+        }
+    }
+
+    var window: QuotaWindow {
+        switch self {
+        case .window(let window):
+            return window
+        case .credits(let remaining, let total, let periodEnd):
+            return QuotaWindow(
+                label: "Credits",
+                used: max(total - remaining, 0),
+                limit: total,
+                resetAt: periodEnd
+            )
+        }
+    }
+}
+
+struct QuotaSnapshot: Codable, Equatable, Sendable {
+    let source: String
+    let accountIdentifier: String?
+    let planName: String?
+    let primary: QuotaWindow?
+    let secondary: QuotaWindow?
+    let tertiary: QuotaWindow?
+    let creditsRemaining: Double?
+    let creditsTotal: Double?
+    let updatedAt: Date
+    let periodEnd: Date?
+    let accountValidUntil: Date?
+    let subscriptionWillRenew: Bool?
+    let subscriptionStatus: String?
+    let isQuotaBlocked: Bool?
+    let note: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case source
+        case accountIdentifier
+        case planName
+        case primary
+        case secondary
+        case tertiary
+        case creditsRemaining
+        case creditsTotal
+        case updatedAt
+        case periodEnd
+        case accountValidUntil
+        case subscriptionWillRenew
+        case subscriptionStatus
+        case isQuotaBlocked
+        case note
+    }
+
+    init(
+        source: String,
+        accountIdentifier: String? = nil,
+        planName: String? = nil,
+        primary: QuotaWindow?,
+        secondary: QuotaWindow?,
+        tertiary: QuotaWindow? = nil,
+        creditsRemaining: Double?,
+        creditsTotal: Double?,
+        updatedAt: Date,
+        periodEnd: Date? = nil,
+        accountValidUntil: Date? = nil,
+        subscriptionWillRenew: Bool? = nil,
+        subscriptionStatus: String? = nil,
+        isQuotaBlocked: Bool? = nil,
+        note: String?
+    ) {
+        self.source = source
+        self.accountIdentifier = accountIdentifier
+        self.planName = planName
+        self.primary = primary
+        self.secondary = secondary
+        self.tertiary = tertiary
+        self.creditsRemaining = creditsRemaining
+        self.creditsTotal = creditsTotal
+        self.updatedAt = updatedAt
+        self.periodEnd = periodEnd ?? [primary?.resetAt, secondary?.resetAt, tertiary?.resetAt].compactMap { $0 }.max()
+        self.accountValidUntil = accountValidUntil
+        self.subscriptionWillRenew = subscriptionWillRenew
+        self.subscriptionStatus = subscriptionStatus
+        self.isQuotaBlocked = isQuotaBlocked
+        self.note = note
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            source: try container.decode(String.self, forKey: .source),
+            accountIdentifier: try container.decodeIfPresent(String.self, forKey: .accountIdentifier),
+            planName: try container.decodeIfPresent(String.self, forKey: .planName),
+            primary: try container.decodeIfPresent(QuotaWindow.self, forKey: .primary),
+            secondary: try container.decodeIfPresent(QuotaWindow.self, forKey: .secondary),
+            tertiary: try container.decodeIfPresent(QuotaWindow.self, forKey: .tertiary),
+            creditsRemaining: try container.decodeIfPresent(Double.self, forKey: .creditsRemaining),
+            creditsTotal: try container.decodeIfPresent(Double.self, forKey: .creditsTotal),
+            updatedAt: try container.decode(Date.self, forKey: .updatedAt),
+            periodEnd: try container.decodeIfPresent(Date.self, forKey: .periodEnd),
+            accountValidUntil: try container.decodeIfPresent(Date.self, forKey: .accountValidUntil),
+            subscriptionWillRenew: try container.decodeIfPresent(Bool.self, forKey: .subscriptionWillRenew),
+            subscriptionStatus: try container.decodeIfPresent(String.self, forKey: .subscriptionStatus),
+            isQuotaBlocked: try container.decodeIfPresent(Bool.self, forKey: .isQuotaBlocked),
+            note: try container.decodeIfPresent(String.self, forKey: .note)
+        )
+    }
+
+    var statusBarMetric: QuotaDisplayMetric? {
+        if let primary, primary.limit > 0 {
+            return .window(primary)
+        }
+        if let secondary, secondary.limit > 0 {
+            return .window(secondary)
+        }
+        if let creditsRemaining, let creditsTotal, creditsTotal > 0 {
+            return .credits(remaining: creditsRemaining, total: creditsTotal, periodEnd: periodEnd)
+        }
+        return nil
+    }
+
+    var orderedMetrics: [QuotaDisplayMetric] {
+        var items: [QuotaDisplayMetric] = []
+        if let primary, primary.limit > 0 {
+            items.append(.window(primary))
+        }
+        if let secondary, secondary.limit > 0 {
+            items.append(.window(secondary))
+        }
+        if let tertiary, tertiary.limit > 0 {
+            items.append(.window(tertiary))
+        }
+        if let creditsRemaining, let creditsTotal, creditsTotal > 0 {
+            items.append(.credits(remaining: creditsRemaining, total: creditsTotal, periodEnd: periodEnd))
+        }
+        return items
+    }
+
+    var primaryPanelMetric: QuotaDisplayMetric? {
+        guard let primary else { return nil }
+        return .window(primary)
+    }
+
+    var secondaryPanelMetric: QuotaDisplayMetric? {
+        if let secondary {
+            return .window(secondary)
+        }
+        if let creditsRemaining, let creditsTotal, creditsTotal > 0 {
+            return .credits(remaining: creditsRemaining, total: creditsTotal, periodEnd: periodEnd)
+        }
+        return nil
+    }
+
+    var tertiaryPanelMetric: QuotaDisplayMetric? {
+        guard let tertiary else { return nil }
+        return .window(tertiary)
+    }
+
+    var secondaryPanelTitle: String {
+        secondaryPanelMetric?.title ?? "Weekly"
+    }
+
+    func replacing(source: String? = nil, updatedAt: Date? = nil, note: String? = nil) -> QuotaSnapshot {
+        QuotaSnapshot(
+            source: source ?? self.source,
+            accountIdentifier: accountIdentifier,
+            planName: planName,
+            primary: primary,
+            secondary: secondary,
+            tertiary: tertiary,
+            creditsRemaining: creditsRemaining,
+            creditsTotal: creditsTotal,
+            updatedAt: updatedAt ?? self.updatedAt,
+            periodEnd: periodEnd,
+            accountValidUntil: accountValidUntil,
+            subscriptionWillRenew: subscriptionWillRenew,
+            subscriptionStatus: subscriptionStatus,
+            isQuotaBlocked: isQuotaBlocked,
+            note: note ?? self.note
+        )
+    }
+}
