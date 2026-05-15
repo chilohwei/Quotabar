@@ -357,41 +357,47 @@ struct DashboardView: View {
         let accountIDs = accounts.map(\.id)
 
         ScrollView(.vertical, showsIndicators: false) {
-            if toolAccounts.isEmpty {
-                emptyState
-            } else if accounts.isEmpty {
-                filteredEmptyState
-            } else {
-                LazyVStack(spacing: 12) {
-                    ForEach(accounts) { account in
-                        AccountCardView(
-                            account: account,
-                            language: appState.language,
-                            isActive: appState.activeAccountByTool[appState.selectedTool] == account.id,
-                            isRefreshing: isAccountRefreshing(account),
-                            loadState: accountLoadState(account),
-                            quota: appState.quotaByAccount[account.id],
-                            errorMessage: appState.errorByAccount[account.id],
-                            canActivate: true,
-                            refreshCycleID: refreshCycleID,
-                            onActivate: { appState.activateAccount(account) },
-                            onDelete: { appState.deleteAccount(account) }
-                        )
-                        .transaction { transaction in
-                            if isRefreshingSelectedTool {
-                                transaction.animation = nil
+            ZStack(alignment: .topLeading) {
+                ScrollIndicatorHider()
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
+
+                if toolAccounts.isEmpty {
+                    emptyState
+                } else if accounts.isEmpty {
+                    filteredEmptyState
+                } else {
+                    LazyVStack(spacing: 12) {
+                        ForEach(accounts) { account in
+                            AccountCardView(
+                                account: account,
+                                language: appState.language,
+                                isActive: appState.activeAccountByTool[appState.selectedTool] == account.id,
+                                isRefreshing: isAccountRefreshing(account),
+                                loadState: accountLoadState(account),
+                                quota: appState.quotaByAccount[account.id],
+                                errorMessage: appState.errorByAccount[account.id],
+                                canActivate: true,
+                                refreshCycleID: refreshCycleID,
+                                onActivate: { appState.activateAccount(account) },
+                                onDelete: { appState.deleteAccount(account) }
+                            )
+                            .transaction { transaction in
+                                if isRefreshingSelectedTool {
+                                    transaction.animation = nil
+                                }
                             }
                         }
                     }
+                    .padding(.top, 2)
+                    .padding(.bottom, 10)
+                    .frame(maxWidth: .infinity, alignment: .top)
+                    .animation(isRefreshingSelectedTool ? nil : .easeInOut(duration: 0.16), value: accountIDs)
                 }
-                .padding(.top, 2)
-                .padding(.bottom, 10)
-                .frame(maxWidth: .infinity, alignment: .top)
-                .animation(isRefreshingSelectedTool ? nil : .easeInOut(duration: 0.16), value: accountIDs)
             }
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .background(ScrollIndicatorHider())
-        .scrollIndicators(.hidden)
+        .scrollIndicators(.never, axes: .vertical)
         .clipped()
         .frame(maxWidth: .infinity)
     }
@@ -759,13 +765,11 @@ private struct ScrollIndicatorHider: NSViewRepresentable {
 
         override func layout() {
             super.layout()
-            if configuredScrollView == nil {
-                configureWhenReady()
-            }
+            configureWhenReady()
         }
 
         func configureWhenReady() {
-            guard configuredScrollView == nil, !isConfigureScheduled else { return }
+            guard !isConfigureScheduled else { return }
             isConfigureScheduled = true
             DispatchQueue.main.async { [weak self] in
                 self?.configureNearestScrollView()
@@ -774,29 +778,21 @@ private struct ScrollIndicatorHider: NSViewRepresentable {
 
         private func configureNearestScrollView() {
             isConfigureScheduled = false
-            if let scrollView = configuredScrollView {
-                configure(scrollView)
-                return
-            }
-            var root: NSView? = self
-            while let superview = root?.superview {
-                root = superview
-            }
-            guard let scrollView = findFirstScrollView(in: root ?? self) else {
-                return
-            }
+            guard let scrollView = enclosingScrollView ?? configuredScrollView ?? findNearestScrollView() else { return }
             configure(scrollView)
             configuredScrollView = scrollView
         }
 
         private func configure(_ scrollView: NSScrollView) {
+            scrollView.scrollerStyle = .overlay
             scrollView.hasVerticalScroller = false
             scrollView.hasHorizontalScroller = false
+            scrollView.verticalScroller?.alphaValue = 0
+            scrollView.horizontalScroller?.alphaValue = 0
             scrollView.verticalScroller?.isHidden = true
             scrollView.horizontalScroller?.isHidden = true
             scrollView.verticalScroller = nil
             scrollView.horizontalScroller = nil
-            scrollView.scrollerStyle = .overlay
             scrollView.autohidesScrollers = true
             scrollView.drawsBackground = false
             scrollView.backgroundColor = .clear
@@ -804,18 +800,32 @@ private struct ScrollIndicatorHider: NSViewRepresentable {
             scrollView.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
             scrollView.contentView.drawsBackground = false
             scrollView.contentView.backgroundColor = .clear
+            hideScrollerSubviews(in: scrollView)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
         }
 
-        private func findFirstScrollView(in view: NSView) -> NSScrollView? {
-            if let scrollView = view as? NSScrollView {
-                return scrollView
-            }
-            for subview in view.subviews {
-                if let scrollView = findFirstScrollView(in: subview) {
+        private func findNearestScrollView() -> NSScrollView? {
+            var view: NSView? = self
+            while let current = view {
+                if let scrollView = current as? NSScrollView {
                     return scrollView
                 }
+                if let scrollView = current.superview as? NSScrollView {
+                    return scrollView
+                }
+                view = current.superview
             }
             return nil
+        }
+
+        private func hideScrollerSubviews(in view: NSView) {
+            for subview in view.subviews {
+                if let scroller = subview as? NSScroller {
+                    scroller.alphaValue = 0
+                    scroller.isHidden = true
+                }
+                hideScrollerSubviews(in: subview)
+            }
         }
     }
 }

@@ -8,14 +8,19 @@ ICONSET_DIR="$DIST_DIR/AppIcon.iconset"
 ICON_FILE_NAME="AppIcon.icns"
 APP_NAME="QuotaBar"
 BUNDLE_ID="com.chiloh.QuotaBar"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
 ARCH="arm64"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
+VERSION_BUMP="patch"
+SKIP_REMOTE_VERSION_CHECK="${QUOTABAR_SKIP_REMOTE_VERSION_CHECK:-false}"
 
 usage() {
     cat <<USAGE
-Usage: scripts/build_macos_app.sh [--arch arm64|x86_64|universal|all] [--version 1.0.0]
+Usage: scripts/build_macos_app.sh [--arch arm64|x86_64|universal|all] [--version 1.0.2] [--bump patch|minor|major] [--skip-version-check]
+
+When --version is omitted, the script reads GitHub remote tags and uses the
+next patch version after the latest stable vX.Y.Z tag.
 
 Outputs:
   dist/QuotaBar-<arch>.app
@@ -24,7 +29,8 @@ Outputs:
 Examples:
   scripts/build_macos_app.sh --arch arm64
   scripts/build_macos_app.sh --arch universal
-  scripts/build_macos_app.sh --arch all --version 1.0.0
+  scripts/build_macos_app.sh --arch all
+  scripts/build_macos_app.sh --arch all --version 1.0.2
 USAGE
 }
 
@@ -37,6 +43,14 @@ while [[ $# -gt 0 ]]; do
         --version)
             VERSION="${2:-}"
             shift 2
+            ;;
+        --bump)
+            VERSION_BUMP="${2:-}"
+            shift 2
+            ;;
+        --skip-version-check)
+            SKIP_REMOTE_VERSION_CHECK=true
+            shift
             ;;
         -h|--help)
             usage
@@ -58,6 +72,21 @@ case "$ARCH" in
         exit 1
         ;;
 esac
+
+if [[ -z "$VERSION" ]]; then
+    VERSION="$("$ROOT_DIR/scripts/release_version.sh" next --bump "$VERSION_BUMP")"
+    echo "Resolved release version from GitHub remote tags: $VERSION"
+fi
+
+if [[ "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+    if [[ "$SKIP_REMOTE_VERSION_CHECK" == true ]]; then
+        echo "Skipping remote version increment check."
+    else
+        "$ROOT_DIR/scripts/release_version.sh" check "$VERSION" >/dev/null
+    fi
+else
+    echo "Skipping remote version increment check for non-release version: $VERSION"
+fi
 
 mkdir -p "$DIST_DIR" "$RELEASE_DIR"
 rm -rf "$ICONSET_DIR"

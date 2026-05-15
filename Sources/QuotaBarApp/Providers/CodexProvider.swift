@@ -25,7 +25,7 @@ struct CodexImportedAccount: Sendable {
 
 struct CodexProvider: Provider {
     let tool: ToolKind = .codex
-    let treatsImportedCredentialsAsActiveSelection = false
+    let treatsImportedCredentialsAsActiveSelection = true
     private let fileService = FileService()
 
     private var codexHomePath: String {
@@ -1080,9 +1080,6 @@ struct CodexProvider: Provider {
 
         registry["accounts"] = accounts
         if makeActive {
-            registry["active_account_key"] = accountKey
-            registry["active_account_activated_at_ms"] = nowMilliseconds
-        } else if registry["active_account_key"] == nil {
             registry["active_account_key"] = accountKey
             registry["active_account_activated_at_ms"] = nowMilliseconds
         }

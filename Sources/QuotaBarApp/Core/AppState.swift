@@ -115,7 +115,14 @@ final class AppState: ObservableObject {
                 try Task.checkCancellation()
                 let secret = try await provider.authenticateViaBrowser()
                 try Task.checkCancellation()
-                try await addAccount(tool: tool, name: "", secret: secret)
+                try await addAccount(
+                    tool: tool,
+                    name: "",
+                    secret: secret,
+                    makeActive: false,
+                    useAsDefaultActive: false,
+                    applyToTool: false
+                )
             } catch is CancellationError {
             } catch {
                 AppLog.account.error("Add account failed for \(tool.rawValue, privacy: .public): \(String(describing: error), privacy: .private)")
@@ -346,7 +353,7 @@ final class AppState: ObservableObject {
             if let activeID = activeAccountByTool[tool], accounts.contains(where: { $0.id == activeID }) {
                 continue
             }
-            activeAccountByTool[tool] = accounts.first(where: { $0.tool == tool })?.id
+            activeAccountByTool[tool] = nil
         }
     }
 

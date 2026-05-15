@@ -45,6 +45,18 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
 
+      - name: Validate release version
+        shell: bash
+        run: |
+          version="${{ steps.meta.outputs.version }}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            scripts/release_version.sh check "$version" --exclude-version "$version"
+          elif [[ "${{ github.event.inputs.version }}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+            scripts/release_version.sh check "$version"
+          else
+            echo "Skipping release version validation for non-release build version: $version"
+          fi
+
       - name: Run tests
         shell: bash
         run: swift test
@@ -52,7 +64,12 @@ jobs:
       - name: Build DMG
         shell: bash
         run: |
+          skip_check=false
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            skip_check=true
+          fi
           BUILD_NUMBER="${{ steps.meta.outputs.build_number }}" \
+          QUOTABAR_SKIP_REMOTE_VERSION_CHECK="$skip_check" \
           bash scripts/build_macos_app.sh \
             --arch "${{ matrix.arch }}" \
             --version "${{ steps.meta.outputs.version }}"
