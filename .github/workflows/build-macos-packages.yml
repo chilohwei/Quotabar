@@ -100,6 +100,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Download artifacts
         uses: actions/download-artifact@v7
         with:
@@ -114,3 +117,18 @@ jobs:
           files: |
             dist/releases/*.dmg
             dist/releases/*.dmg.sha256
+
+      - name: Update Homebrew cask from released asset
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          bash scripts/update_homebrew_cask.sh "$version"
+          bash scripts/verify_homebrew_cask.sh "$version" --skip-brew
+
+      - name: Sync standalone Homebrew tap
+        shell: bash
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          bash scripts/sync_homebrew_tap.sh "$version"

@@ -48,6 +48,10 @@ brew update
 brew upgrade --cask quotabar
 ```
 
+发布新版本时，GitHub Actions 会在 Release 创建后根据远端 DMG 的实际 SHA256
+自动同步独立 tap 仓库 `chilohwei/homebrew-quotabar`。仓库需要配置
+`HOMEBREW_TAP_GITHUB_TOKEN` secret，且该 token 需要对 tap 仓库有写权限。
+
 系统要求：macOS Ventura 13 或更高版本。
 
 ## 怎么用
